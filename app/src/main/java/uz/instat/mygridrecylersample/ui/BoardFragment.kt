@@ -2,12 +2,13 @@ package uz.instat.mygridrecylersample.ui
 
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
-import android.widget.Toast
+import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Observer
@@ -26,7 +27,7 @@ class BoardFragment : Fragment(),
     private lateinit var boardAdapter: BoardAdapter
     private lateinit var wobbleAnim: Animation
     private val viewModel: BoardViewModel by viewModels()
-    private val addColumn = 5
+    private val columnCount = 5
 
 
     private var iconList = arrayListOf<IconModel>()
@@ -35,33 +36,24 @@ class BoardFragment : Fragment(),
     private val observerIconsStatus = Observer<NetworkStatus> {
         when (it) {
             is NetworkStatus.LOADING -> {
-
-            }
-            is NetworkStatus.ERROR -> {
-
-            }
-            else -> {
-
-            }
-        }
-    }
-    private val observerIconsByColumnStatus = Observer<NetworkStatus> {
-        when (it) {
-            is NetworkStatus.LOADING -> {
+                progressbar.isVisible = true
             }
             is NetworkStatus.ERROR -> {
             }
             else -> {
+                progressbar.isVisible = false
             }
         }
     }
     private val observerUpdateIconStatus = Observer<NetworkStatus> {
         when (it) {
             is NetworkStatus.LOADING -> {
+                progressbar.isVisible = true
             }
             is NetworkStatus.ERROR -> {
             }
             else -> {
+                progressbar.isVisible = false
             }
         }
     }
@@ -112,13 +104,14 @@ class BoardFragment : Fragment(),
         board_view.setCustomColumnDragItem(null)
 
         wobbleAnim = AnimationUtils.loadAnimation(requireContext(), R.anim.wobble)
-        for (i in 0 until addColumn) {
+        (0 until columnCount).forEach { it ->
             val iconsByColumn = arrayListOf<IconModel>()
             iconList.forEach { iconModel ->
-                if (iconModel.columnId == i.toLong()) {
+                if (iconModel.columnId == it.toLong()) {
                     iconsByColumn.add(iconModel)
                 }
             }
+            iconsByColumn.sortBy { it.rowId }
             addColumn(iconsByColumn)
         }
     }
@@ -128,7 +121,7 @@ class BoardFragment : Fragment(),
         adapterList.add(boardAdapter)
 
         val footer = View.inflate(activity, R.layout.column_header, null)
-        footer.item_count.text = null
+        footer.item_count.text = "${iconList[0].columnId}"
 
         val layoutManager = GridLayoutManager(context, 4)
         val columnProperties = ColumnProperties.Builder.newBuilder(boardAdapter)
@@ -144,12 +137,15 @@ class BoardFragment : Fragment(),
 
     override fun onItemDragStarted(column: Int, row: Int) {
 //        adapterList[column].onAnimate(row)
-//        Toast.makeText(requireContext(), "onItemDragStarted!", Toast.LENGTH_SHORT).show()
     }
 
     override fun onItemDragEnded(fromColumn: Int, fromRow: Int, toColumn: Int, toRow: Int) {
-//        viewModel.updateIcon(fromColumn, fromRow, toColumn, toRow)
-//        Toast.makeText(requireContext(), "onItemDragEnded!", Toast.LENGTH_SHORT).show()
+        viewModel.updateIcon(
+            fromColumn.toLong(),
+            fromRow.toLong(),
+            toColumn.toLong(),
+            toRow.toLong()
+        )
     }
 
     override fun onItemChangedPosition(oldColumn: Int, oldRow: Int, newColumn: Int, newRow: Int) {

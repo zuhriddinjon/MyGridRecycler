@@ -15,25 +15,17 @@ import uz.instat.mygridrecylersample.util.NetworkStatus
 interface IBoardVM {
 
     val liveIconsStatus: LiveData<NetworkStatus>
-    val liveIconsByColumnStatus: LiveData<NetworkStatus>
     val liveUpdateIconStatus: LiveData<NetworkStatus>
     val liveIcons: LiveData<List<IconModel>>
-    val liveIconsByColumn: LiveData<List<IconModel>>
 
     fun loadIcons()
-
-    fun loadIconsByColumn(columnId: Int)
-
-    fun updateIcon(fromColumn: Int, fromRow: Int, toColumn: Int, toRow: Int)
-    fun update(iconModel: IconModel)
+    fun updateIcon(fromColumn: Long, fromRow: Long, toColumn: Long, toRow: Long)
 }
 
 class BoardViewModel(app: Application) : AndroidViewModel(app), IBoardVM {
     override val liveIconsStatus = MutableLiveData<NetworkStatus>()
-    override val liveIconsByColumnStatus = MutableLiveData<NetworkStatus>()
     override val liveUpdateIconStatus = MutableLiveData<NetworkStatus>()
     override val liveIcons = MutableLiveData<List<IconModel>>()
-    override val liveIconsByColumn = MutableLiveData<List<IconModel>>()
 
     private val iconDao = DataBaseProvider.getInstance(app.applicationContext).iconDao()
 
@@ -42,57 +34,66 @@ class BoardViewModel(app: Application) : AndroidViewModel(app), IBoardVM {
         viewModelScope.launch {
             try {
                 liveIconsStatus.postValue(NetworkStatus.LOADING)
-                val list = iconDao.getAll()
-                Log.d("TAG", "loadIcon1: ${liveIcons.value.toString()}")
+                var list = iconDao.getAll()
                 if (list.isNullOrEmpty()) {
-                    Log.d("TAG", "loadIcon2: ${liveIcons.value.toString()}")
                     val mItemArray = arrayListOf<IconModel>()
                     val addItems = 15
+                    var id = 1L
                     for (i in 0 until 5) {
+                        val columnId: Long = i.toLong()
                         for (j in 0 until addItems) {
                             val rowId: Long = j.toLong()
-                            val columnId: Long = i.toLong()
                             mItemArray.add(
                                 IconModel(
+                                    id = id,
                                     rowId = rowId,
                                     columnId = columnId,
-                                    name = "Item $rowId"
+                                    name = "Item $columnId - $rowId"
                                 )
                             )
+                            id++
                         }
                     }
                     iconDao.saveAll(mItemArray)
-                    iconDao.getAll()
-                    Log.d("TAG", "loadIcon3: ${iconDao.getAll()}")
-                    liveIcons.postValue(mItemArray)
+                    list = iconDao.getAll()
+                    liveIcons.postValue(list)
                 } else
                     liveIcons.postValue(list)
                 liveIconsStatus.postValue(NetworkStatus.SUCCESS)
             } catch (e: Exception) {
-                Log.d("TAG", "loadIcon: ${e.message}")
                 liveIconsStatus.postValue(NetworkStatus.ERROR(R.string.error_load))
             }
         }
     }
 
-    override fun loadIconsByColumn(columnId: Int) {
-        viewModelScope.launch {
-            try {
-                liveIconsByColumnStatus.postValue(NetworkStatus.LOADING)
-                val list = iconDao.getIconsByColumnId(columnId)
-                liveIconsByColumn.postValue(list)
-                liveIconsByColumnStatus.postValue(NetworkStatus.SUCCESS)
-            } catch (e: Exception) {
-                liveIconsByColumnStatus.postValue(NetworkStatus.ERROR(R.string.error_load))
-            }
-        }
-    }
-
-    override fun updateIcon(fromColumn: Int, fromRow: Int, toColumn: Int, toRow: Int) {
+    override fun updateIcon(fromColumn: Long, fromRow: Long, toColumn: Long, toRow: Long) {
         viewModelScope.launch {
             try {
                 liveUpdateIconStatus.postValue(NetworkStatus.LOADING)
-                iconDao.updateIcon(fromColumn, fromRow, toColumn, toRow)
+                val icon = iconDao.getIcon(fromColumn, fromRow)
+                iconDao.deleteIcon(fromColumn, fromRow)
+                Log.d("TAGROW", "updateIcon: $fromRow $toRow")
+
+                if (toColumn == fromColumn) {
+                    if (toRow > fromRow) {
+                        (fromRow until toRow).forEach { row ->
+                            iconDao.updateIcon(fromColumn, row + 1, toColumn, row)
+                        }
+                    } else if (toRow < fromRow) {
+                        (fromRow - 1 downTo toRow).forEach { row ->
+                            iconDao.updateIcon(fromColumn, row, toColumn, row + 1)
+                        }
+                    }
+                } else {
+                    (fromRow until 14).forEach { row ->
+                        iconDao.updateIcon(fromColumn, row + 1, fromColumn, row)
+                    }
+                    (14 downTo toRow).forEach { row ->
+                        iconDao.updateIcon(toColumn, row, toColumn, row + 1)
+                    }
+                }
+
+                iconDao.save(IconModel(icon.id, toRow, toColumn, icon.name))
                 liveUpdateIconStatus.postValue(NetworkStatus.SUCCESS)
             } catch (e: Exception) {
                 liveUpdateIconStatus.postValue(NetworkStatus.ERROR(R.string.error_load))
@@ -100,12 +101,4 @@ class BoardViewModel(app: Application) : AndroidViewModel(app), IBoardVM {
         }
     }
 
-    override fun update(iconModel: IconModel) {
-        viewModelScope.launch {
-            try {
-                iconDao.update(iconModel)
-            } catch (e: Exception) {
-            }
-        }
-    }
 }

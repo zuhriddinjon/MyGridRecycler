@@ -78,7 +78,7 @@ class BoardAdapter(
     }
 
     override fun getUniqueItemId(position: Int): Long {
-        return list[position].rowId
+        return list[position].id
     }
 
     sealed class DragPayload {
